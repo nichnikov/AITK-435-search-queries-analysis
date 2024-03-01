@@ -89,5 +89,6 @@ for fn in ["hs_test_data_for_reform_recognition.csv"]:
                     pass
             print(num + 1, "/", len(dates), "working time, sec:", time() - t)
         result_df = pd.concat(result_dfs, axis=0)
-        # result_df.to_csv(os.path.join(os.getcwd(), "results", str(k) + "_" + fn), index=False, sep="\t")
-        result_df.drop("lem_request_string", axis=1).to_csv(os.path.join(os.getcwd(), "results", str(k) + "_" + fn), index=False, sep="\t")
+        result_df.drop("lem_request_string", axis=1, inplace=True)
+        result_df.drop_duplicates(inplace=True)
+        result_df.to_csv(os.path.join(os.getcwd(), "results", str(k) + "_" + fn), index=False, sep="\t")
