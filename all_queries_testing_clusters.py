@@ -8,7 +8,7 @@ from src.start import tokenizer, vectorizer
 from sklearn.cluster import AgglomerativeClustering
 
 
-def grouped_func(data: list) -> [{}]:
+def grouped_func(data: list) -> list[dict]:
     """Function groups input list of data with format: [(label, vector, text)]
     into list of dictionaries, each dictionary of type:
     {
@@ -49,11 +49,12 @@ chunk_size = 500000
 for fn in ["hs_test_data_for_reform_recognition.csv"]:
     path = os.path.join(os.getcwd(), "data", fn)
     df_iter = pd.read_csv(path, sep="\t", encoding = "utf-16", on_bad_lines='skip', chunksize=chunk_size)
+    
     for k, df in enumerate(df_iter):
-        df["serverTimestamp"] = df["serverTimestamp"].astype("datetime64[ns]")
+        df["serverTimestamp"] = df["servertimestamp"].astype("datetime64[ns]")
         
         dates = list(set(df["serverTimestamp"]))
-        texts = list(df["payload__request_string"])
+        texts = [str(tx) for tx in df["payload__request_string"].to_list()]
         
         # добавим лемматизированные тексты:
         lm_texts_df = pd.DataFrame([{"lem_request_string": " ".join(lm_tx)} for lm_tx in tokenizer(texts)])
@@ -88,4 +89,5 @@ for fn in ["hs_test_data_for_reform_recognition.csv"]:
                     pass
             print(num + 1, "/", len(dates), "working time, sec:", time() - t)
         result_df = pd.concat(result_dfs, axis=0)
+        # result_df.to_csv(os.path.join(os.getcwd(), "results", str(k) + "_" + fn), index=False, sep="\t")
         result_df.drop("lem_request_string", axis=1).to_csv(os.path.join(os.getcwd(), "results", str(k) + "_" + fn), index=False, sep="\t")

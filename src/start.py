@@ -24,6 +24,7 @@ if parameters.stopwords_files:
 
 
 mystem_path = os.path.join(os.getcwd(), "models", "mystem")
-tokenizer = TextsTokenizer(mystem_path)
+# tokenizer = TextsTokenizer(mystem_path)
+tokenizer = TextsTokenizer()
 tokenizer.add_stopwords(stopwords)
 
