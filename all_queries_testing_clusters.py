@@ -29,7 +29,7 @@ def grouped_func(data: list) -> list[dict]:
 
 
 
-def clustering_func(vectorizer: SentenceTransformer, clusterer: AgglomerativeClustering, texts: []) -> {}:
+def clustering_func(vectorizer: SentenceTransformer, clusterer: AgglomerativeClustering, texts: list) -> dict:
     """Function for text collection clustering"""
     vectors = vectorizer.encode([str(x).lower() for x in texts])
     clusters = clusterer.fit(vectors)
@@ -63,21 +63,21 @@ for fn in ["hs_ss_1020_1022_search_str_all_asis_by_day.csv"]:
         result_dfs = []
 
         for num, date in enumerate(dates):
-            df_date = df[df["serverTimestamp"] == date]
-            df_tms_grp = df_date[["new_licensesId", "serverTimestamp"]].groupby("new_licensesId", as_index=False).count()
-            users_more = list(set(df_tms_grp["new_licensesId"][df_tms_grp["serverTimestamp"] > 1])) # пользователи у которых больше 1ого сообщения
+            date_df = df[df["serverTimestamp"] == date]
+            tms_grp_df = date_df[["new_licensesId", "serverTimestamp"]].groupby("new_licensesId", as_index=False).count()
+            users_more = list(set(tms_grp_df["new_licensesId"][tms_grp_df["serverTimestamp"] > 1])) # пользователи у которых больше 1ого сообщения
             
             for user in users_more:
-                df_date_user = df_date[df_date["new_licensesId"] == user]
-                lm_texts = list(df_date_user["lem_request_string"])
+                date_user_df = date_df[date_df["new_licensesId"] == user]
+                lm_texts = list(date_user_df["lem_request_string"])
                 clustering_dicts_df = pd.DataFrame(clustering_func(vectorizer, clusterer, lm_texts))
-                temp_clustering_user_df = pd.merge(df_date_user, clustering_dicts_df, on="lem_request_string")
+                temp_clustering_user_df = pd.merge(date_user_df, clustering_dicts_df, on="lem_request_string")
                 result_dfs.append(temp_clustering_user_df)
             
-            users_one = list(set(df_tms_grp["new_licensesId"][df_tms_grp["serverTimestamp"] == 1]))
+            users_one = list(set(tms_grp_df["new_licensesId"][tms_grp_df["serverTimestamp"] == 1]))
             # if users_one:
             #    df_date_one = df_date[df_date["new_licensesId"].isin(users_one)]
-            df_date_one = df_tms_grp["new_licensesId"][df_tms_grp["serverTimestamp"] == 1]
+            df_date_one = tms_grp_df["new_licensesId"][tms_grp_df["serverTimestamp"] == 1]
             temp_one_df = pd.DataFrame([{**d, **{"cluster_num": 0, "cluster_size": 1}}  for d in df_date_one.to_dict(orient="records")])
             result_dfs.append(temp_one_df)
             
