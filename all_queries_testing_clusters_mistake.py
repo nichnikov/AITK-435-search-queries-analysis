@@ -1,0 +1,109 @@
+import os
+from time import time
+import pandas as pd
+from sentence_transformers import SentenceTransformer
+from itertools import groupby
+from operator import itemgetter
+from src.start import tokenizer, vectorizer
+from sklearn.cluster import AgglomerativeClustering
+
+
+def grouped_func(data: list) -> list[dict]:
+    """Function groups input list of data with format: [(label, vector, text)]
+    into list of dictionaries, each dictionary of type:
+    {
+    label: label,
+    texts: list of texts correspond to label
+    vectors_matrix: numpy matrix of vectors correspond to label
+    }
+    """
+    data = sorted(data, key=lambda x: x[0])
+    grouped_data = []
+    for key, group_items in groupby(data, key=itemgetter(0)):
+        d = {"label": key, "texts": []}
+        for item in group_items:
+            d["texts"].append(item[1])
+        grouped_data.append(d)
+    return grouped_data
+
+
+
+def clustering_func(vectorizer: SentenceTransformer, clusterer: AgglomerativeClustering, texts: []) -> {}:
+    """Function for text collection clustering"""
+    vectors = vectorizer.encode([str(x).lower() for x in texts])
+    clusters = clusterer.fit(vectors)
+    # data = [(lb, v, tx) for lb, v, tx in zip(clusters.labels_, vectors, texts)]
+    data = [(lb, tx) for lb, v, tx in zip(clusters.labels_, vectors, texts)]
+    grouped_data = grouped_func(data)
+    result_list = []
+    for d in grouped_data:
+        label = str(d["label"])
+        cluster_size = len(d["texts"])
+        result_list += [{"cluster_num": label, "lem_request_string": tx, "cluster_size": cluster_size} for tx in d["texts"]]
+    return result_list
+
+clusterer = AgglomerativeClustering(n_clusters=None, distance_threshold=1.0, memory=os.path.join("cache"))
+
+chunk_size = 500000
+start = 500000
+end = start + chunk_size
+k = 1
+for fn in ["hs_ss_1020_1022_search_str_all_asis_by_day.csv"]:
+    path = os.path.join(os.getcwd(), "data", fn)
+    # df_iter = pd.read_csv(path, sep="\t", encoding = "utf-16", on_bad_lines='skip', chunksize=chunk_size)
+    df_full = pd.read_csv(path, sep="\t", encoding = "utf-16", on_bad_lines='skip')
+    
+    # for k, df in enumerate(df_iter):
+    print("start:", start, "end:", end)
+    df = df_full[start:end]
+    print(df)
+
+    df["serverTimestamp"] = df["serverTimestamp"].astype("datetime64[ns]")
+    print("after serverTimestamp -> datetime64[ns]:")
+    print(df)
+    
+    dates = list(set(df["serverTimestamp"]))
+    texts = [str(tx) for tx in df["payload__request_string"].to_list()]
+    
+    # добавим лемматизированные тексты:
+    lm_texts_df = pd.DataFrame([{"lem_request_string": " ".join(lm_tx)} for lm_tx in tokenizer(texts)])
+    df = pd.concat([df, lm_texts_df], axis=1)
+    
+    result_dfs = []
+    s = 0
+    for num, date in enumerate(dates):
+        t = time()
+        
+        df_date = df[df["serverTimestamp"] == date]
+        df_tms_grp = df_date[["new_licensesId", "serverTimestamp"]].groupby("new_licensesId", as_index=False).count()
+        users_more = list(set(df_tms_grp["new_licensesId"][df_tms_grp["serverTimestamp"] > 1])) # пользователи у которых больше 1ого сообщения
+        
+        temp_result = []
+        for user in users_more:
+            df_date_user = df_date[df_date["new_licensesId"] == user]
+            lm_texts = list(df_date_user["lem_request_string"])
+            clustering_dicts_df = pd.DataFrame(clustering_func(vectorizer, clusterer, lm_texts))
+            temp_clustering_user_df = pd.merge(df_date_user, clustering_dicts_df, on="lem_request_string")
+            result_dfs.append(temp_clustering_user_df)
+            s += temp_clustering_user_df.shape[0]
+            print("user More S=", s)
+        
+        users_one = list(set(df_tms_grp["new_licensesId"][df_tms_grp["serverTimestamp"] == 1]))
+        if users_one:
+            df_date_one = df_date[df_date["new_licensesId"].isin(users_one)]
+            temp_one_df = pd.DataFrame([{**d, **{"cluster_num": 0, "cluster_size": 1}}  for d in df_date_one.to_dict(orient="records")])
+            result_dfs.append(temp_one_df)
+            s += temp_one_df.shape[0]
+            print("user one S=", s)
+    
+    result_df = pd.concat(result_dfs, axis=0)
+    print(k, "with duplicates:", result_df.shape)
+    result_df.drop("lem_request_string", axis=1, inplace=True)
+    result_df.drop_duplicates(inplace=True)
+    print(k, "withowt duplicates:", result_df.shape)
+        
+        # if result_df.shape[0] < 500000:
+        #    print(k, "withowt duplicates:", result_df.shape)
+        #    break
+    
+    result_df.to_csv(os.path.join(os.getcwd(), "results", "240313", str(k) + "_" + fn), index=False, sep="\t")

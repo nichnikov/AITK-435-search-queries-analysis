@@ -5,6 +5,7 @@ from sentence_transformers import SentenceTransformer
 from itertools import groupby
 from operator import itemgetter
 from src.start import tokenizer, vectorizer
+# from src.config import logger
 from sklearn.cluster import AgglomerativeClustering
 
 
@@ -30,9 +31,8 @@ def grouped_func(data: list) -> list[dict]:
 
 def clustering_func(vectorizer: SentenceTransformer, clusterer: AgglomerativeClustering, texts: []) -> {}:
     """Function for text collection clustering"""
-    vectors = vectorizer.encode([x.lower() for x in texts])
+    vectors = vectorizer.encode([str(x).lower() for x in texts])
     clusters = clusterer.fit(vectors)
-    # data = [(lb, v, tx) for lb, v, tx in zip(clusters.labels_, vectors, texts)]
     data = [(lb, tx) for lb, v, tx in zip(clusters.labels_, vectors, texts)]
     grouped_data = grouped_func(data)
     result_list = []
@@ -46,12 +46,12 @@ clusterer = AgglomerativeClustering(n_clusters=None, distance_threshold=1.0, mem
 
 
 chunk_size = 500000
-for fn in ["hs_test_data_for_reform_recognition.csv"]:
+for fn in ["hs_ss_1020_1022_search_str_all_asis_by_day.csv"]:
     path = os.path.join(os.getcwd(), "data", fn)
     df_iter = pd.read_csv(path, sep="\t", encoding = "utf-16", on_bad_lines='skip', chunksize=chunk_size)
     
     for k, df in enumerate(df_iter):
-        df["serverTimestamp"] = df["servertimestamp"].astype("datetime64[ns]")
+        df["serverTimestamp"] = df["serverTimestamp"].astype("datetime64[ns]")
         
         dates = list(set(df["serverTimestamp"]))
         texts = [str(tx) for tx in df["payload__request_string"].to_list()]
@@ -70,25 +70,26 @@ for fn in ["hs_test_data_for_reform_recognition.csv"]:
             
             temp_result = []
             for user in users_more:
-                try:
-                    df_date_user = df_date[df_date["new_licensesId"] == user]
-                    lm_texts = list(df_date_user["lem_request_string"])
-                    clustering_dicts_df = pd.DataFrame(clustering_func(vectorizer, clusterer, lm_texts))
-                    temp_clustering_user_df = pd.merge(df_date_user, clustering_dicts_df, on="lem_request_string")
-                    result_dfs.append(temp_clustering_user_df)
-                except:
-                    pass
+                df_date_user = df_date[df_date["new_licensesId"] == user]
+                lm_texts = list(df_date_user["lem_request_string"])
+                clustering_dicts_df = pd.DataFrame(clustering_func(vectorizer, clusterer, lm_texts))
+                temp_clustering_user_df = pd.merge(df_date_user, clustering_dicts_df, on="lem_request_string")
+                result_dfs.append(temp_clustering_user_df)
             
             users_one = list(set(df_tms_grp["new_licensesId"][df_tms_grp["serverTimestamp"] == 1]))
             if users_one:
-                try:
-                    df_date_one = df_date[df_date["new_licensesId"].isin(users_one)]
-                    temp_one_df = pd.DataFrame([{**d, **{"cluster_num": 0, "cluster_size": 1}}  for d in df_date_one.to_dict(orient="records")])
-                    result_dfs.append(temp_one_df)
-                except:
-                    pass
-            print(num + 1, "/", len(dates), "working time, sec:", time() - t)
+                df_date_one = df_date[df_date["new_licensesId"].isin(users_one)]
+                temp_one_df = pd.DataFrame([{**d, **{"cluster_num": 0, "cluster_size": 1}}  for d in df_date_one.to_dict(orient="records")])
+                result_dfs.append(temp_one_df)
+
+            # print(num + 1, "/", len(dates), "working time, sec:", time() - t)
         result_df = pd.concat(result_dfs, axis=0)
+        
+        # logger.info(" ".join([str(k), "with duplicates:", str(result_df.shape)]))       
+        print(" ".join([str(k), "with duplicates:", str(result_df.shape)]))
         result_df.drop("lem_request_string", axis=1, inplace=True)
         result_df.drop_duplicates(inplace=True)
-        result_df.to_csv(os.path.join(os.getcwd(), "results", str(k) + "_" + fn), index=False, sep="\t")
+        print(" ".join([str(k), "without duplicates:", str(result_df.shape)]))
+        # logger.info(" ".join([str(k), "without duplicates:", str(result_df.shape)]))
+        
+        result_df.to_csv(os.path.join(os.getcwd(), "results", "240314", str(k) + "_" + fn), index=False, sep="\t")
