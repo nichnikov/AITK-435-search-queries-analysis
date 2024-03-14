@@ -65,7 +65,11 @@ for fn in ["hs_ss_1020_1022_search_str_all_asis_by_day.csv"]:
         for num, date in enumerate(dates):
             df_date = df[df["serverTimestamp"] == date]
             df_tms_grp = df_date[["new_licensesId", "serverTimestamp"]].groupby("new_licensesId", as_index=False).count()
-            users_more = list(set(df_tms_grp["new_licensesId"][df_tms_grp["serverTimestamp"] > 1])) # пользователи у которых больше 1ого сообщения
+            
+            users_more = df_tms_grp["new_licensesId"][df_tms_grp["serverTimestamp"] > 1]
+            users_more_df = df_date[df_date["new_licensesId"].isin(users_more)]
+            # users_more = list(set(df_tms_grp["new_licensesId"][df_tms_grp["serverTimestamp"] > 1])) # пользователи у которых больше 1ого сообщения
+            
             
             for user in users_more:
                 df_date_user = df_date[df_date["new_licensesId"] == user]
@@ -74,11 +78,9 @@ for fn in ["hs_ss_1020_1022_search_str_all_asis_by_day.csv"]:
                 temp_clustering_user_df = pd.merge(df_date_user, clustering_dicts_df, on="lem_request_string")
                 result_dfs.append(temp_clustering_user_df)
             
-            users_one = list(set(df_tms_grp["new_licensesId"][df_tms_grp["serverTimestamp"] == 1]))
-            # if users_one:
-            #    df_date_one = df_date[df_date["new_licensesId"].isin(users_one)]
-            df_date_one = df_tms_grp["new_licensesId"][df_tms_grp["serverTimestamp"] == 1]
-            temp_one_df = pd.DataFrame([{**d, **{"cluster_num": 0, "cluster_size": 1}}  for d in df_date_one.to_dict(orient="records")])
+            # users_one = list(set(df_tms_grp["new_licensesId"][df_tms_grp["serverTimestamp"] == 1]))
+            date_one_df = df_tms_grp["new_licensesId"][df_tms_grp["serverTimestamp"] == 1]
+            temp_one_df = pd.DataFrame([{**d, **{"cluster_num": 0, "cluster_size": 1}}  for d in date_one_df.to_dict(orient="records")])
             result_dfs.append(temp_one_df)
             
 
